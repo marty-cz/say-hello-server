@@ -3,14 +3,14 @@
 Grafana default login `admin:prom-operator`
 
 
-sum by (code) (rate(app_http_request_total{app="say-hello-server"}[1m]))
+sum by (code) (rate(app_http_requests_total{job="say-hello-server"}[1m]))
 
 ## Loki
 
 ```shell
 helm repo add grafana https://grafana.github.io/helm-charts
 helm repo update
-helm upgrade --install loki grafana/loki-stack   --set fluentd.enabled=true,promtail.enabled=false
+helm upgrade --install loki grafana/loki-stack   --set promtail.enabled=false
 ```
 
 ### Setup DataSource in Grafana  

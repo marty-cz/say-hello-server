@@ -4,6 +4,7 @@ metadata:
   name: {{ include "say-hello-server.fullname" . }}
   labels:
     {{- include "say-hello-server.labels" . | nindent 4 }}
+    monitoring: enabled
   {{- with .Values.service.annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
@@ -12,7 +13,7 @@ spec:
   type: {{ .Values.service.type }}
   ports:
     - port: {{ .Values.service.port }}
-      targetPort: http
+      targetPort: web
       protocol: TCP
       name: web
   selector:
