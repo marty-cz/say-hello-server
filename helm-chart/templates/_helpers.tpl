@@ -48,7 +48,6 @@ Selector labels
 {{- define "say-hello-server.selectorLabels" -}}
 app.kubernetes.io/name: {{ include "say-hello-server.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
-job: {{ .Release.Name }}
 {{- end }}
 
 {{/*
