@@ -19,6 +19,9 @@ spec:
       {{- end }}
       labels:
         {{- include "say-hello-server.selectorLabels" . | nindent 8 }}
+        {{- if .Values.log.enableCollecting }}
+        log.collecting: enabled
+        {{- end }}
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
