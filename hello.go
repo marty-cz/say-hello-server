@@ -2,8 +2,7 @@ package main
 
 import (
 	"fmt"
-	"io"
-	"log"
+	"io/ioutil"
 	"math/rand"
 	"net/http"
 	"os"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	log "github.com/sirupsen/logrus"
 )
 
 var (
@@ -45,6 +45,20 @@ var (
 	urlWithLangFmt = "http://0.0.0.0:" + port + "/%s"
 )
 
+func getLogLevelFromSysEnv() log.Level {
+	logLevel, err := log.ParseLevel(os.Getenv("LOG_LEVEL"))
+	if err != nil {
+		logLevel = log.InfoLevel
+	}
+	return logLevel
+}
+
+func init() {
+	log.SetOutput(os.Stdout)
+	log.SetFormatter(&log.JSONFormatter{})
+	log.SetLevel(getLogLevelFromSysEnv())
+}
+
 func getEnv(key, fallback string) string {
 	if value, ok := os.LookupEnv(key); ok {
 		return value
@@ -56,13 +70,39 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	lang := strings.TrimPrefix(r.URL.RequestURI(), "/")
 	greeting, ok := hello[lang]
 	if !ok {
-		fmt.Printf("unknown language: %s\n", lang)
+		log.Errorf("Unknown language %s", lang)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprint(w, greeting)
+}
+
+func processResponse(resp *http.Response, err error) {
+	defer resp.Body.Close()
+
+	kind := "failure"
+	if err != nil {
+		log.Errorf("Got an error ", err)
+		responseCounter.WithLabelValues(kind, "").Inc()
+		return
+	}
+
+	bodyBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Error(err)
+		return
+	}
+
+	if resp.StatusCode == http.StatusOK {
+		kind = "success"
+		log.Info(string(bodyBytes))
+	} else {
+		log.Warn(string(bodyBytes))
+	}
+
+	responseCounter.WithLabelValues(kind, resp.Status).Inc()
 }
 
 func selfPing() {
@@ -78,27 +118,12 @@ func selfPing() {
 	for {
 		time.Sleep(time.Duration(oscillationFactor()) * time.Second)
 
-		index := rand.Intn(len(langs) - 1)
+		index := rand.Intn(len(langs))
 		lang := langs[index]
 
-		//log.Println("Ask for " + fmt.Sprintf(urlWithLangFmt, lang))
+		log.Debugf("Ask for url %s", fmt.Sprintf(urlWithLangFmt, lang))
 		resp, err := http.Get(fmt.Sprintf(urlWithLangFmt, lang))
-		kind := "failure"
-		if err != nil {
-			log.Println("got am error", err)
-			responseCounter.WithLabelValues(kind, "").Inc()
-			continue
-		}
-
-		if resp.StatusCode == http.StatusOK {
-			kind = "success"
-		}
-
-		io.Copy(os.Stdout, resp.Body)
-		fmt.Println()
-		resp.Body.Close()
-
-		responseCounter.WithLabelValues(kind, resp.Status).Inc()
+		processResponse(resp, err)
 	}
 }
 
@@ -112,7 +137,7 @@ func main() {
 	mux.Handle("/metrics", promhttp.HandlerFor(pr, promhttp.HandlerOpts{}))
 	mux.Handle("/", promhttp.InstrumentHandlerCounter(requestCounter, http.HandlerFunc(handler)))
 
-	log.Println("starting server on port ", port)
+	log.Infof("starting server on port %v", port)
 
 	go selfPing()
 
